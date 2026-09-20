@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Qwen-Image-2.1 — test console</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Qwen-Image-2.1 — test console</h1>
+    <span class="pill" id="model-pill"><span class="dot" id="dot"></span><span id="model-name">detecting…</span></span>
+    <span class="pill" id="api-pill">api: …</span>
+    <span class="spacer"></span>
+    <button class="ghost" id="refresh">Re-check server</button>
+  </header>
+
+  <nav class="tabs">
+    <button data-tab="t2i" class="active">Text → Image</button>
+    <button data-tab="edit">Edit / image-conditioned</button>
+    <button data-tab="chat">Chat (image in / image out)</button>
+    <button data-tab="diag">Diagnostics</button>
+  </nav>
+
+  <main>
+    <!-- ------------------------------------------------ text to image -->
+    <section class="panel tabpane active" id="t2i">
+      <div class="grid">
+        <div>
+          <label for="t2i-prompt">Prompt</label>
+          <textarea id="t2i-prompt" placeholder="A ceramic teapot on a wooden table, soft window light"></textarea>
+
+          <label for="t2i-negative">Negative prompt <span class="hint">(only used when CFG &gt; 1)</span></label>
+          <textarea id="t2i-negative" placeholder="blurry, low detail, watermark" style="min-height:52px"></textarea>
+
+          <div class="row">
+            <div>
+              <label for="t2i-size">Size</label>
+              <select id="t2i-size"></select>
+              <input type="text" id="t2i-size-custom" placeholder="e.g. 1152x896" style="display:none;margin-top:6px" />
+              <div class="hint" id="t2i-size-hint"></div>
+            </div>
+            <div>
+              <label for="t2i-steps">Steps</label>
+              <input type="number" id="t2i-steps" value="40" min="1" max="100" />
+              <div class="hint">checkpoint wants 40 (server default is 50)</div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label for="t2i-cfg">true_cfg_scale</label>
+              <input type="number" id="t2i-cfg" value="1.0" step="0.1" min="1" max="10" />
+              <div class="hint" id="t2i-cfg-hint">1.0 = guidance off (fastest)</div>
+            </div>
+            <div>
+              <label for="t2i-seed">Seed</label>
+              <input type="text" id="t2i-seed" placeholder="blank = random" />
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="primary" id="t2i-run">Generate</button>
+            <button class="ghost" id="t2i-random">Random seed</button>
+          </div>
+          <div id="t2i-banner"></div>
+          <div id="t2i-progress"></div>
+        </div>
+
+        <div class="result">
+          <div class="frame" id="t2i-frame"><div class="empty">No image yet — press Generate (~66 s at 1024×1024 / 40 steps)</div></div>
+          <div class="meta" id="t2i-meta"></div>
+          <div class="actions">
+            <button class="ghost" id="t2i-download" disabled>Download PNG</button>
+            <button class="ghost" id="t2i-to-edit" disabled>Send to Edit tab</button>
+            <button class="ghost" id="t2i-json" disabled>Show raw JSON</button>
+          </div>
+          <details id="t2i-jsonbox" hidden><summary>raw response</summary><pre id="t2i-jsonpre"></pre></details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------ edit -->
+    <section class="panel tabpane" id="edit">
+      <div class="grid">
+        <div>
+          <label>Reference images <span class="hint">(1–4; drop files or click)</span></label>
+          <div id="drop">Drop images here, or click to choose</div>
+          <input type="file" id="edit-files" accept="image/*" multiple hidden />
+          <div class="thumbs" id="edit-thumbs"></div>
+
+          <label for="edit-prompt">Instruction / prompt</label>
+          <textarea id="edit-prompt" placeholder='Write the words "FRESH BASIL" on this plate in dark green lettering'></textarea>
+
+          <div class="row">
+            <div>
+              <label for="edit-size">Output size</label>
+              <select id="edit-size"></select>
+            </div>
+            <div>
+              <label for="edit-steps">Steps</label>
+              <input type="number" id="edit-steps" value="40" min="1" max="100" />
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label for="edit-cfg">true_cfg_scale</label>
+              <input type="number" id="edit-cfg" value="1.0" step="0.1" min="1" max="10" />
+            </div>
+            <div>
+              <label for="edit-seed">Seed</label>
+              <input type="text" id="edit-seed" placeholder="blank = random" />
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="primary" id="edit-run">Apply edit</button>
+            <button class="ghost" id="edit-clear">Clear references</button>
+          </div>
+          <div id="edit-banner"></div>
+          <div id="edit-progress"></div>
+        </div>
+
+        <div class="result">
+          <div class="frame" id="edit-frame"><div class="empty">Add a reference image and apply an edit</div></div>
+          <div class="meta" id="edit-meta"></div>
+          <div class="actions">
+            <button class="ghost" id="edit-download" disabled>Download PNG</button>
+            <button class="ghost" id="edit-json" disabled>Show raw JSON</button>
+          </div>
+          <details id="edit-jsonbox" hidden><summary>raw response</summary><pre id="edit-jsonpre"></pre></details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------ chat -->
+    <section class="panel tabpane" id="chat">
+      <div class="grid">
+        <div>
+          <p class="hint" style="margin-top:0">
+            Same pipeline through <code>/v1/chat/completions</code> with <code>modalities:["image"]</code>.
+            The picture comes back inside the message, not in <code>.data</code> — this tab proves that path works.
+          </p>
+
+          <label>Optional reference images</label>
+          <div id="chat-drop">Drop images here, or click to choose</div>
+          <input type="file" id="chat-files" accept="image/*" multiple hidden />
+          <div class="thumbs" id="chat-thumbs"></div>
+
+          <label for="chat-prompt">Prompt</label>
+          <textarea id="chat-prompt" placeholder="A ceramic teapot on a wooden table"></textarea>
+
+          <div class="row">
+            <div>
+              <label for="chat-size">Size</label>
+              <select id="chat-size"></select>
+            </div>
+            <div>
+              <label for="chat-steps">Steps</label>
+              <input type="number" id="chat-steps" value="40" min="1" max="100" />
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label for="chat-cfg">true_cfg_scale</label>
+              <input type="number" id="chat-cfg" value="1.0" step="0.1" min="1" max="10" />
+            </div>
+            <div>
+              <label for="chat-seed">Seed</label>
+              <input type="text" id="chat-seed" placeholder="blank = random" />
+            </div>
+          </div>
+
+          <div class="actions"><button class="primary" id="chat-run">Send</button></div>
+          <div id="chat-banner"></div>
+          <div id="chat-progress"></div>
+        </div>
+
+        <div class="result">
+          <div class="frame" id="chat-frame"><div class="empty">No reply yet</div></div>
+          <div class="meta" id="chat-meta"></div>
+          <div class="actions">
+            <button class="ghost" id="chat-download" disabled>Download PNG</button>
+            <button class="ghost" id="chat-json" disabled>Show raw JSON</button>
+          </div>
+          <details id="chat-jsonbox" hidden><summary>raw response</summary><pre id="chat-jsonpre"></pre></details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------ diagnostics -->
+    <section class="panel tabpane" id="diag">
+      <div class="actions" style="margin-top:0">
+        <button class="ghost" id="diag-reload">Reload</button>
+        <span class="hint" id="diag-upstream"></span>
+      </div>
+      <label>Upstream health / model list</label>
+      <pre id="diag-health">…</pre>
+      <details><summary>Prometheus /metrics (last 400 lines)</summary><pre id="diag-metrics">…</pre></details>
+      <p class="hint">
+        The model server's own Swagger UI (FastAPI docs) lives on the upstream host, e.g.
+        <a id="diag-docs" href="#" target="_blank" rel="noreferrer">/docs</a> — it can POST requests but
+        shows base64 strings instead of pictures.
+      </p>
+    </section>
+  </main>
+
+  <footer>
+    <div>Session gallery <span class="hint" id="gallery-count">(0)</span></div>
+    <div class="gallery" id="gallery"></div>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>

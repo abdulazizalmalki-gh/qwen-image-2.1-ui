@@ -1,0 +1,14 @@
+.git
+.github
+.gitignore
+*.md
+LICENSE
+docker-compose*.yml
+scripts
+tests
+package.json
+package-lock.json
+node_modules
+**/__pycache__
+**/*.pyc
+screenshots

@@ -1,0 +1,31 @@
+# Qwen-Image-2.1 test console.
+#
+# The UI talks to its own backend, which proxies an OpenAI-compatible
+# vLLM-Omni server. Only the UI is in this repo.
+#
+#   docker compose up -d --build
+#   open http://<host>:8080
+#
+# Point QWEN_IMAGE_API at your model server (must expose /v1/images/generations,
+# /v1/images/edits and /v1/chat/completions).
+
+services:
+  ui:
+    build: .
+    image: qwen-image-ui:local
+    container_name: qwen-image-ui
+    ports:
+      - "${UI_PORT:-8080}:8080"
+    environment:
+      QWEN_IMAGE_API: "${QWEN_IMAGE_API:-http://your-model-server:8000}"
+      # Leave empty to auto-detect the model id from the server's /v1/models.
+      QWEN_IMAGE_MODEL: "${QWEN_IMAGE_MODEL:-}"
+      # Image generation at 1024x1024 / 40 steps takes ~60-75 s on 2x3090.
+      QWEN_IMAGE_TIMEOUT_S: "900"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/api/config', timeout=5).status == 200 else 1)\""]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 10s

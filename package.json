@@ -1,0 +1,13 @@
+{
+  "name": "qwen-image-ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "DOM tests for the Qwen-Image-2.1 test console",
+  "scripts": {
+    "test": "node tests/ui_dom_test.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^26.1.0"
+  }
+}
