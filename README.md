@@ -28,8 +28,8 @@ prompt).
 ## Quickstart
 
 ```bash
-git clone https://github.com/abdulazizalmalki-gh/qwen-image-ui.git
-cd qwen-image-ui
+git clone https://github.com/abdulazizalmalki-gh/qwen-image-2.1-ui.git
+cd qwen-image-2.1-ui
 cp .env.example .env          # set QWEN_IMAGE_API to your model server
 docker compose up -d --build
 open http://localhost:8080
@@ -38,8 +38,8 @@ open http://localhost:8080
 Without compose:
 
 ```bash
-docker build -t qwen-image-ui .
-docker run --rm -p 8080:8080 -e QWEN_IMAGE_API=http://your-model-server:8000 qwen-image-ui
+docker build -t qwen-image-2.1-ui .
+docker run --rm -p 8080:8080 -e QWEN_IMAGE_API=http://your-model-server:8000 qwen-image-2.1-ui
 ```
 
 Smoke-test the deployed UI (stdlib only, exercises all three generation paths):
