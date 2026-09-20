@@ -111,7 +111,7 @@ async def generate(payload: dict) -> dict:
 async def edit(
     prompt: Annotated[str, Form()],
     images: Annotated[list[UploadFile], File()],
-    size: Annotated[str, Form()] = "1024x1024",
+    size: Annotated[str, Form()] = "",          # empty = let the server derive it
     steps: Annotated[int, Form()] = 40,
     cfg: Annotated[float, Form()] = 1.0,
     seed: Annotated[str, Form()] = "",
@@ -131,10 +131,13 @@ async def edit(
         fields: dict[str, str] = {
             "model": model,
             "prompt": prompt,
-            "size": size,
             "num_inference_steps": str(steps),
             "true_cfg_scale": str(cfg),
         }
+        # An omitted size makes the server derive the output from the last
+        # reference image's aspect ratio at ~1 MP; passing it pins the size.
+        if size.strip():
+            fields["size"] = size.strip()
         if seed.strip():
             fields["seed"] = seed.strip()
         if negative_prompt.strip() and float(cfg) > 1.0:

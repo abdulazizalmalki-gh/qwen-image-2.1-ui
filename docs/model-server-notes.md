@@ -86,6 +86,16 @@ automatically on CUDA OOM).
   Without a negative prompt, CFG is effectively off — which is what you want, since
   guidance roughly doubles compute.
 - `size` values are floored to a multiple of 32, never rejected.
+- **An omitted size does not scale the output to ~1 MP.** The recipe says an edit
+  request without a size "derives the output size from the last condition image's
+  aspect ratio at approximately 1024x1024". Measured on this build with single-reference
+  edits, omitting the size returned the reference's exact dimensions every time
+  (640x480 -> 640x480, 1216x704 -> 1216x704, 1024x1024 -> 1024x1024). Pass an explicit
+  size when you care, and treat "same as the reference image" as the reliable option.
+- **Practical VRAM ceiling on 2x24 GB:** 1024x1024 (1.05 MP) and 1216x704 (0.86 MP)
+  generate fine; 1536x864 (1.33 MP) dies with `CUDA out of memory. Tried to allocate
+  1.42 GiB ... 1.11 GiB is free` at ~22.4 GiB in use. Presets above ~1 MP are flagged
+  *(heavy)* in the UI for that reason.
 - `/v1/images/edits` takes multipart/form-data, not JSON; a JSON body resets the
   connection, which is easy to mistake for a broken server.
 - Up to 4 reference images per request; a fifth is rejected with a 400.

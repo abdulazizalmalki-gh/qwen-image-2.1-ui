@@ -107,6 +107,9 @@ function sizeOk(size) {
 }
 
 function renderSizeSelects() {
+  // t2i: presets + custom. edit: presets + the two reference-driven modes + custom.
+  // chat: presets + custom (its size rides in extra_body, so no reference mode).
+  const hasReferenceModes = (id) => id === 'edit-size';
   ['t2i-size', 'edit-size', 'chat-size'].forEach((id) => {
     const sel = $(id);
     const keep = sel.value;
@@ -123,13 +126,75 @@ function renderSizeSelects() {
       });
       sel.appendChild(og);
     });
+    const special = document.createElement('optgroup');
+    special.label = hasReferenceModes(id) ? 'from the reference image' : 'other';
+    if (hasReferenceModes(id)) {
+      const ref = document.createElement('option');
+      ref.value = 'reference';
+      ref.id = 'edit-size-reference-option';
+      ref.textContent = 'same size as the reference image';
+      special.appendChild(ref);
+      const auto = document.createElement('option');
+      auto.value = 'auto';
+      auto.textContent = 'let the server decide (measured: same as the reference)';
+      special.appendChild(auto);
+    }
     const custom = document.createElement('option');
     custom.value = 'custom';
     custom.textContent = 'custom…';
-    sel.appendChild(custom);
+    special.appendChild(custom);
+    sel.appendChild(special);
     sel.value = keep || '1024x1024';
     if (!sel.value) sel.value = '1024x1024';
   });
+  refreshReferenceSizeOption();
+}
+
+/* Label the "same size as the reference" option with the pixels we will send. */
+function refreshReferenceSizeOption() {
+  const opt = $('edit-size-reference-option');
+  if (!opt) return;
+  const item = state.refs[state.refs.length - 1];
+  if (item && item.w) {
+    const fitted = sizeOk(`${item.w}x${item.h}`);
+    opt.textContent = fitted.ok
+      ? `same size as the reference image (${fitted.value})`
+      : `same size as the reference image (${item.w}x${item.h} — too small or too large)`;
+  } else {
+    opt.textContent = 'same size as the reference image';
+  }
+}
+
+/* Read a picture's pixel size so "same size as reference" can be exact. */
+function attachDims(item) {
+  const img = new window.Image();
+  img.onload = () => {
+    item.w = img.naturalWidth;
+    item.h = img.naturalHeight;
+    refreshReferenceSizeOption();
+  };
+  img.src = item.url;
+}
+
+/* Resolve a size select (+ optional custom input) into the value to send. */
+function selectedSize(selId, customId) {
+  const v = $(selId).value;
+  if (v === 'auto') return { ok: true, value: '', omit: true, why: '' };
+  if (v === 'reference') {
+    const item = state.refs[state.refs.length - 1];
+    if (!item || !item.w) return { ok: false, why: 'the reference image has not finished loading yet — try again in a moment' };
+    const fitted = sizeOk(`${item.w}x${item.h}`);
+    if (fitted.ok && fitted.snapped) fitted.why = `the ${item.w}x${item.h} reference is not on the 32 grid — using ${fitted.value}`;
+    return fitted;
+  }
+  const raw = v === 'custom' && customId ? $(customId).value : v;
+  return sizeOk(raw);
+}
+
+function syncCustomInput(selId, customId) {
+  const custom = $(selId).value === 'custom';
+  if ($(customId)) $(customId).style.display = custom ? 'block' : 'none';
+  return custom;
 }
 
 function presetHeavy(sel) {
@@ -252,7 +317,12 @@ function readFiles(files, kind) {
     if (!f.type.startsWith('image/')) return;
     if (list.length >= cap) return;
     const reader = new FileReader();
-    reader.onload = () => { list.push({ url: reader.result, name: f.name }); refBox(kind); };
+    reader.onload = () => {
+      const item = { url: reader.result, name: f.name };
+      list.push(item);
+      attachDims(item);
+      refBox(kind);
+    };
     reader.readAsDataURL(f);
   });
   if (list.length >= cap) banner($(isEdit ? 'edit-banner' : 'chat-banner'), 'busy', 'Reference limit is 4 images — the model rejects a fifth.');
@@ -307,8 +377,7 @@ async function runT2I() {
   const prompt = $('t2i-prompt').value.trim();
   if (!prompt) { banner($('t2i-banner'), 'err', 'Prompt is required.'); return; }
 
-  const custom = $('t2i-size-custom').style.display !== 'none';
-  const size = sizeOk(custom ? $('t2i-size-custom').value : $('t2i-size').value);
+  const size = selectedSize('t2i-size', 't2i-size-custom');
   if (!size.ok) { banner($('t2i-banner'), 'err', size.why); return; }
   const warnings = [];
   if (size.snapped) warnings.push(size.why);
@@ -361,16 +430,17 @@ async function runEdit() {
   if (!state.refs.length) { banner($('edit-banner'), 'err', 'Add at least one reference image.'); return; }
   const prompt = $('edit-prompt').value.trim();
   if (!prompt) { banner($('edit-banner'), 'err', 'An instruction/prompt is required.'); return; }
-  const size = sizeOk($('edit-size').value);
+  const size = selectedSize('edit-size', 'edit-size-custom');
   if (!size.ok) { banner($('edit-banner'), 'err', size.why); return; }
   const warnings = [];
   if (size.snapped) warnings.push(size.why);
-  if (presetHeavy($('edit-size'))) warnings.push('this size is above ~1 MP: expected to be slow and may OOM on a 24 GB card');
+  if (size.omit) warnings.push('no output size sent — measured behaviour is to render at the reference image\'s size');
+  if (!size.omit && presetHeavy($('edit-size'))) warnings.push('this size is above ~1 MP: expected to be slow and may OOM on a 24 GB card');
   banner($('edit-banner'), warnings.length ? 'busy' : '', warnings.map((w) => `• ${w}`).join('<br>'));
 
   const fd = new FormData();
   fd.append('prompt', prompt);
-  fd.append('size', size.value);
+  if (!size.omit) fd.append('size', size.value);      // omitted = server derives it
   fd.append('steps', $('edit-steps').value || '40');
   fd.append('cfg', $('edit-cfg').value || '1.0');
   const seed = $('edit-seed').value.trim();
@@ -421,7 +491,7 @@ async function runChat() {
   const btn = $('chat-run');
   const prompt = $('chat-prompt').value.trim();
   if (!prompt) { banner($('chat-banner'), 'err', 'Prompt is required.'); return; }
-  const chatSize = sizeOk($('chat-size').value);
+  const chatSize = selectedSize('chat-size', 'chat-size-custom');
   if (!chatSize.ok) { banner($('chat-banner'), 'err', chatSize.why); return; }
   const payload = {
     prompt,
@@ -499,13 +569,14 @@ window.addEventListener('DOMContentLoaded', () => {
 
   renderSizeSelects();
   $('t2i-size').onchange = (e) => {
-    const custom = e.target.value === 'custom';
-    $('t2i-size-custom').style.display = custom ? 'block' : 'none';
+    syncCustomInput('t2i-size', 't2i-size-custom');
     $('t2i-size-hint').textContent = presetHeavy($('t2i-size'))
       ? 'above ~1 MP — heavy, may exceed 24 GB VRAM'
       : 'every preset keeps both sides a multiple of 32';
   };
   $('t2i-size-hint').textContent = 'every preset keeps both sides a multiple of 32';
+  $('edit-size').onchange = () => syncCustomInput('edit-size', 'edit-size-custom');
+  $('chat-size').onchange = () => syncCustomInput('chat-size', 'chat-size-custom');
   $('t2i-random').onclick = () => { $('t2i-seed').value = Math.floor(Math.random() * 1e9); };
   $('t2i-cfg').oninput = () => {
     const v = num($('t2i-cfg').value) || 1;
@@ -517,7 +588,9 @@ window.addEventListener('DOMContentLoaded', () => {
   $('t2i-json').onclick = () => { $('t2i-jsonbox').hidden = !$('t2i-jsonbox').hidden; };
   $('t2i-to-edit').onclick = () => {
     if (!state.lastT2i) return;
-    state.refs = [{ url: state.lastT2i, name: 'from-text-to-image.png' }];
+    const item = { url: state.lastT2i, name: 'from-text-to-image.png' };
+    state.refs = [item];
+    attachDims(item);
     refBox('edit');
     showTab('edit');
   };

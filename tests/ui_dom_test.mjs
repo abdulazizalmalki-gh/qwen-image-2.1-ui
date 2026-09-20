@@ -74,7 +74,7 @@ check('gallery has 1 item', $('gallery-count').textContent === '(1)', $('gallery
 
 // --- size presets -----------------------------------------------------------
 const presetGroups = [...$('t2i-size').querySelectorAll('optgroup')].map((g) => g.label);
-const allPresets = [...$('t2i-size').querySelectorAll('optgroup option')].map((o) => o.value);
+const allPresets = [...$('t2i-size').querySelectorAll('optgroup option')].map((o) => o.value).filter((v) => /^\d+x\d+$/.test(v));
 const badPresets = allPresets.filter((v) => {
   const m = /^(\d+)x(\d+)$/.exec(v);
   return !m || (+m[1]) % 32 !== 0 || (+m[2]) % 32 !== 0;
@@ -87,7 +87,10 @@ const nineSixteen = [...$('t2i-size').querySelectorAll('optgroup')].find((g) => 
 check('16:9 group has exact ratios (512x288 … 2048x1152)', sixteenNine && ['512x288', '1024x576', '1536x864', '2048x1152'].every((v) => [...sixteenNine.querySelectorAll('option')].some((o) => o.value === v)));
 check('16:9 group offers the classic 720p/1080p as floored sizes', sixteenNine && ['1280x704', '1920x1056'].every((v) => [...sixteenNine.querySelectorAll('option')].some((o) => o.value === v)));
 check('9:16 group is the mirror of 16:9', nineSixteen && ['288x512', '576x1024', '864x1536', '1152x2048'].every((v) => [...nineSixteen.querySelectorAll('option')].some((o) => o.value === v)));
-check('edit and chat tabs use the same ladder', $('edit-size').options.length === allPresets.length + 1 && $('chat-size').options.length === allPresets.length + 1);
+const editOptions = [...$('edit-size').options].map((o) => o.value);
+const chatOptions = [...$('chat-size').options].map((o) => o.value);
+check('chat tab offers the same ladder (plus custom)', allPresets.every((v) => chatOptions.includes(v)) && chatOptions.length === allPresets.length + 1, String(chatOptions.length));
+check('edit tab offers the same ladder plus its two reference modes', allPresets.every((v) => editOptions.includes(v)) && ['reference', 'auto'].every((v) => editOptions.includes(v)) && editOptions.length === allPresets.length + 3, String(editOptions.length));
 
 // --- a preset that used to be broken now runs -----------------------------
 $('t2i-size').value = '1280x704';
@@ -130,6 +133,41 @@ check('edit posted multipart form data', !!editCall && editCall.opts.body instan
 check('edit carries 1 image + prompt', editCall && editCall.opts.body.getAll('images').length === 1 && editCall.opts.body.get('prompt').includes('FRESH BASIL'));
 check('edit image rendered', !!$('edit-frame').querySelector('img'));
 check('gallery collected every result', +$('gallery-count').textContent.replace(/\D/g, '') >= 4, $('gallery-count').textContent);
+
+// --- edit output size: same-as-reference and server-derived -----------------
+const editGroups = [...$('edit-size').querySelectorAll('optgroup')].map((g) => g.label);
+check('edit offers reference-driven size modes', editGroups.includes('from the reference image'), editGroups.join(' | '));
+const editSizeValues = [...$('edit-size').options].map((o) => o.value);
+check('edit has "same size as the reference image"', editSizeValues.includes('reference'));
+check('edit has "server-derived from reference aspect"', editSizeValues.includes('auto'));
+
+// jsdom cannot decode images, so inject the pixel size the browser would report
+window.eval("state.refs[state.refs.length - 1].w = 640; state.refs[state.refs.length - 1].h = 480; refreshReferenceSizeOption();");
+check('reference option is labelled with the pixel size', $('edit-size-reference-option').textContent.includes('640x480'), $('edit-size-reference-option').textContent);
+
+$('edit-size').value = 'reference';
+$('edit-run').click();
+await tick(); await tick();
+const refCall = calls.filter((c) => c.url.endsWith('/api/edit')).pop();
+check('"same size as reference" sends the reference size', refCall.opts.body.get('size') === '640x480', String(refCall.opts.body.get('size')));
+
+$('edit-size').value = 'auto';
+$('edit-run').click();
+await tick(); await tick();
+const autoCall = calls.filter((c) => c.url.endsWith('/api/edit')).pop();
+check('"server-derived" omits the size field entirely', autoCall.opts.body.get('size') === null, String(autoCall.opts.body.get('size')));
+check('and the banner explains what the server will do', $('edit-banner').textContent.includes('measured behaviour'), $('edit-banner').textContent);
+
+$('edit-size').value = 'custom';
+$('edit-size').onchange();
+$('edit-size-custom').value = '1000x1000';
+$('edit-run').click();
+await tick(); await tick();
+const customEdit = calls.filter((c) => c.url.endsWith('/api/edit')).pop();
+check('edit custom size snaps to the grid', customEdit.opts.body.get('size') === '992x992', String(customEdit.opts.body.get('size')));
+
+$('edit-size').value = '1024x1024';
+$('edit-size').onchange();
 
 // --- chat tab ---------------------------------------------------------------
 window.document.querySelector('nav.tabs button[data-tab="chat"]').click();
