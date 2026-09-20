@@ -26,15 +26,15 @@ const PRESETS = [
     { value: '1024x576', label: '1024 x 576' },
     { value: '1536x864', label: '1536 x 864', heavy: true },
     { value: '2048x1152', label: '2048 x 1152', heavy: true },
-    { value: '1280x704', label: '1280 x 704' + ' — 720p (height 720 -> 704)' },
-    { value: '1920x1056', label: '1920 x 1056' + ' — 1080p (height 1080 -> 1056)', heavy: true },
+    { value: '1280x704', label: '1280 x 704 (720p)' },
+    { value: '1920x1056', label: '1920 x 1056 (1080p)', heavy: true },
   ]},
   { group: '9:16 portrait', sizes: [
     { value: '288x512', label: '288 x 512' },
     { value: '576x1024', label: '576 x 1024' },
     { value: '864x1536', label: '864 x 1536', heavy: true },
     { value: '1152x2048', label: '1152 x 2048', heavy: true },
-    { value: '704x1280', label: '704 x 1280' + ' — 720-wide portrait (width 720 -> 704)' },
+    { value: '704x1280', label: '704 x 1280 (portrait)' },
   ]},
   { group: '4:3 landscape', sizes: [
     { value: '512x384', label: '512 x 384' },
@@ -120,7 +120,7 @@ function renderSizeSelects() {
       grp.sizes.forEach((sz) => {
         const o = document.createElement('option');
         o.value = sz.value;
-        o.textContent = sz.label + (sz.heavy ? '  (heavy)' : '');
+        o.textContent = sz.label + (sz.heavy ? ' *' : '');   // '*' = heavy, see the hint
         o.dataset.heavy = sz.heavy ? '1' : '';
         og.appendChild(o);
       });
@@ -562,6 +562,8 @@ function showTab(name) {
   document.querySelectorAll('nav.tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
   document.querySelectorAll('.tabpane').forEach((p) => p.classList.toggle('active', p.id === name));
   if (name === 'diag') loadDiag();
+  // deep-linkable tabs: /#edit opens the edit pane (also handy for screenshots)
+  if (window.history && window.history.replaceState) window.history.replaceState(null, '', '#' + name);
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -625,4 +627,11 @@ window.addEventListener('DOMContentLoaded', () => {
   }
   $('t2i-cfg').oninput();
   refreshConfig();
+
+  const wanted = (window.location.hash || '').replace('#', '');
+  if (['t2i', 'edit', 'chat', 'diag'].includes(wanted)) showTab(wanted);
+  window.addEventListener('hashchange', () => {
+    const h = (window.location.hash || '').replace('#', '');
+    if (['t2i', 'edit', 'chat', 'diag'].includes(h)) showTab(h);
+  });
 });

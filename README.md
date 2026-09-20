@@ -143,6 +143,26 @@ stubbed `fetch` and walks every tab — payload shape, validation, the CFG/negat
 prompt rule, multipart edit assembly, chat image extraction, gallery and
 diagnostics. It runs in about a second and needs no GPU.
 
+## Layout and window shapes
+
+The console is responsive and does not need a particular window size:
+
+- Wide windows get the form on the left and the preview on the right; the grid collapses to one
+  column below 1080 px and in short landscape windows (below 620 px tall), so a phone or a
+  half-screen window gets a full-width form with the preview beneath it.
+- A **portrait 1440p monitor (1440x2560)** keeps both columns — 1440 px is wide enough — and the
+  tall viewport is given to the preview (`min-height: 46vh`, image capped at 66vh), so the screen
+  is used instead of a small preview stranded at the top.
+- The collapse that used to happen there was a `<select>` sizing itself to its widest option and
+  pushing the form column wider than the window, clipping text next to it. Guarded with
+  `min-width: 0; max-width: 100%` on inputs/selects plus `minmax(0, 1fr)` on the result column and
+  `min-width: 0` on its children.
+- Paddings, font sizes and preview heights are fluid (`clamp()`), the tab strip scrolls sideways on
+  narrow windows, action buttons go full width on phones, the preview is bounded by both
+  `max-width: 100%` and a viewport-relative `max-height`, and the shell fills the window so the
+  gallery sits at the bottom rather than leaving a dead area under a short page.
+- Tabs are deep-linkable: `/#edit`, `/#chat`, `/#diag` open straight onto that pane.
+
 ## Limits / known behaviour
 
 - One request at a time is the practical mode: the reference server processes
