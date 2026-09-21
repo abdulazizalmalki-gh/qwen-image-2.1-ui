@@ -97,7 +97,7 @@
               <label for="edit-size">Output size</label>
               <select id="edit-size"></select>
               <input type="text" id="edit-size-custom" placeholder="e.g. 1152x896" style="display:none;margin-top:6px" />
-              <div class="hint">default 1024x1024 · "same size as the reference image" matches the picture you upload (floored to the 32 grid)</div>
+              <div class="hint" id="edit-size-hint"></div>
             </div>
             <div>
               <label for="edit-steps">Steps</label>
@@ -124,6 +124,10 @@
         </div>
 
         <div class="result">
+          <div class="compare" id="edit-compare" hidden>
+            <button class="seg" data-view="original" id="edit-view-original">Original</button>
+            <button class="seg active" data-view="edited" id="edit-view-edited">Edited</button>
+          </div>
           <div class="frame" id="edit-frame"><div class="empty">Add a reference image and apply an edit</div></div>
           <div class="meta" id="edit-meta"></div>
           <div class="actions">

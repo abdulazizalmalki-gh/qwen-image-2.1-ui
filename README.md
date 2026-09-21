@@ -21,7 +21,7 @@ browser  ->  this UI (FastAPI + static page)  ->  vLLM-Omni server (/v1/...)
 | Tab | Endpoint exercised | What you can vary |
 | --- | --- | --- |
 | Text → Image | `POST /v1/images/generations` | prompt, negative prompt, size, steps, `true_cfg_scale`, seed |
-| Edit / image-conditioned | `POST /v1/images/edits` (multipart, 1–4 references) | reference images (drop/click/paste), instruction, output size (preset, **same as the reference image**, server-decided, or custom), steps, cfg, seed |
+| Edit / image-conditioned | `POST /v1/images/edits` (multipart, 1–4 references) | reference images (drop/click/paste), instruction, output size (preset, **reference size**, server-decided, or custom), steps, cfg, seed |
 | Chat (image in / image out) | `POST /v1/chat/completions` with `modalities:["image"]` | prompt, optional reference images, size, steps, cfg, seed |
 | Diagnostics | `/health`, `/v1/models`, `/metrics` | live server state, Prometheus output, link to the server's Swagger UI |
 
@@ -78,10 +78,10 @@ and 1216x704 generate, 1536x864 fails with `CUDA out of memory`.
 
 On the edit tab the size list also carries two reference-driven modes:
 
-- **same size as the reference image (W x H)** — sends the uploaded picture's exact
+- **reference size (W x H)** — sends the uploaded picture's exact
   dimensions (floored to the 32 grid if needed), so an edit comes back at the size you
   fed it. The option label shows the pixels that will be sent.
-- **let the server decide** — sends no size at all. Measured on this build it returns the
+- **server decides** — sends no size at all. Measured on this build it returns the
   reference's exact dimensions too, so it is a convenience rather than a different result;
   the recipe's documented "~1 MP derived from the aspect" behaviour did not reproduce in
   our tests (640x480, 1216x704 and 1024x1024 references all came back unchanged).
@@ -149,6 +149,11 @@ npm install && npm test                                        # 25 DOM checks, 
 stubbed `fetch` and walks every tab — payload shape, validation, the CFG/negative
 prompt rule, multipart edit assembly, chat image extraction, gallery and
 diagnostics. It runs in about a second and needs no GPU.
+
+After a run the edit preview grows an **Original / Edited** switch: both images are kept
+client-side (the reference that was actually sent, and the result) and either one is rendered as
+large as the column allows, with the meta line saying which you are looking at (`original
+1216x704`, or the run's metrics for the edited frame). Download saves whichever is on screen.
 
 ## Layout and window shapes
 

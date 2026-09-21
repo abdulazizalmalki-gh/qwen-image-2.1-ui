@@ -2,7 +2,7 @@
 'use strict';
 
 const $ = (id) => document.getElementById(id);
-const state = { config: null, refs: [], chatRefs: [], gallery: [], seq: 0 };
+const state = { config: null, refs: [], chatRefs: [], gallery: [], seq: 0, lastEdit: null, editView: 'edited' };
 
 /* Size presets. Both dimensions MUST be multiples of 32 — the model's VAE is a 16x
    autoencoder and vLLM-Omni floors each side otherwise (measured: 1280x720 renders
@@ -132,11 +132,11 @@ function renderSizeSelects() {
       const ref = document.createElement('option');
       ref.value = 'reference';
       ref.id = 'edit-size-reference-option';
-      ref.textContent = 'same size as the reference image';
+      ref.textContent = 'reference size';
       special.appendChild(ref);
       const auto = document.createElement('option');
       auto.value = 'auto';
-      auto.textContent = 'let the server decide (measured: same as the reference)';
+      auto.textContent = 'server decides (same as reference)';
       special.appendChild(auto);
     }
     const custom = document.createElement('option');
@@ -157,11 +157,14 @@ function refreshReferenceSizeOption() {
   const item = state.refs[state.refs.length - 1];
   if (item && item.w) {
     const fitted = sizeOk(`${item.w}x${item.h}`);
-    opt.textContent = fitted.ok
-      ? `same size as the reference image (${fitted.value})`
-      : `same size as the reference image (${item.w}x${item.h} — too small or too large)`;
+    opt.textContent = 'reference size';
+    if ($('edit-size-hint')) {
+      $('edit-size-hint').textContent = fitted.ok
+        ? `output ${fitted.value} — the size of the picture you upload`
+        : `${item.w}x${item.h} is outside the usable range (256–2048, multiples of 32)`;
+    }
   } else {
-    opt.textContent = 'same size as the reference image';
+    opt.textContent = 'reference size';
   }
 }
 
@@ -172,6 +175,7 @@ function attachDims(item) {
     item.w = img.naturalWidth;
     item.h = img.naturalHeight;
     refreshReferenceSizeOption();
+    updateEditSizeHint();
   };
   img.src = item.url;
 }
@@ -189,6 +193,29 @@ function selectedSize(selId, customId) {
   }
   const raw = v === 'custom' && customId ? $(customId).value : v;
   return sizeOk(raw);
+}
+
+function updateEditSizeHint() {
+  const el = $('edit-size-hint');
+  if (!el) return;
+  const mode = $('edit-size').value;
+  if (mode === 'reference') {
+    const item = state.refs[state.refs.length - 1];
+    if (!item) { el.textContent = 'renders at the size of the picture you upload'; return; }
+    if (!item.w) { el.textContent = 'reading the reference size…'; return; }
+    const fitted = sizeOk(`${item.w}x${item.h}`);
+    el.textContent = fitted.ok
+      ? `output ${fitted.value} — the size of the picture you upload${fitted.snapped ? ' (floored to the 32 grid)' : ''}`
+      : `${item.w}x${item.h} is outside the usable range (256–2048, multiples of 32)`;
+  } else if (mode === 'auto') {
+    el.textContent = 'no size sent — measured behaviour is the reference image\'s size';
+  } else if (mode === 'custom') {
+    el.textContent = 'any WxH; floored to a multiple of 32 like the server does';
+  } else {
+    el.textContent = presetHeavy($('edit-size'))
+      ? 'above ~1 MP — heavy, may exceed 24 GB VRAM'
+      : 'every value keeps both sides a multiple of 32';
+  }
 }
 
 function syncCustomInput(selId, customId) {
@@ -250,6 +277,29 @@ function showImage(frame, metaEl, dataUrl, metaHtml, alt) {
   img.alt = alt || 'generated image';
   frame.appendChild(img);
   if (metaEl) metaEl.innerHTML = metaHtml || '';
+}
+
+function showEditView(view) {
+  const pair = state.lastEdit;
+  if (!pair) return;
+  state.editView = view;
+  $('edit-view-original').classList.toggle('active', view === 'original');
+  $('edit-view-edited').classList.toggle('active', view === 'edited');
+  const url = view === 'original' ? pair.referenceUrl : pair.resultUrl;
+  const label = view === 'original' ? pair.referenceLabel : 'edited';
+  showImage($('edit-frame'), $('edit-meta'),
+    url,
+    `<span>${label}</span>` + (view === 'original' ? '' : metricsHtml(pair.resp, pair.wall)),
+    view === 'original' ? 'reference image that was edited' : 'edited result');
+}
+
+function setEditPair(pair) {
+  state.lastEdit = pair;
+  $('edit-compare').hidden = false;
+  $('edit-view-original').innerHTML = pair.referenceCount > 1
+    ? `Original <small>(ref ${pair.referenceCount})</small>`
+    : 'Original';
+  showEditView('edited');
 }
 
 function makeBannerNode(container) { const d = document.createElement('div'); container.appendChild(d); return d; }
@@ -431,6 +481,7 @@ async function runEdit() {
   if (!state.refs.length) { banner($('edit-banner'), 'err', 'Add at least one reference image.'); return; }
   const prompt = $('edit-prompt').value.trim();
   if (!prompt) { banner($('edit-banner'), 'err', 'An instruction/prompt is required.'); return; }
+  updateEditSizeHint();          // keep the readout honest even if the value was set programmatically
   const size = selectedSize('edit-size', 'edit-size-custom');
   if (!size.ok) { banner($('edit-banner'), 'err', size.why); return; }
   const warnings = [];
@@ -438,6 +489,7 @@ async function runEdit() {
   if (size.omit) warnings.push('no output size sent — measured behaviour is to render at the reference image\'s size');
   if (!size.omit && presetHeavy($('edit-size'))) warnings.push('this size is above ~1 MP: expected to be slow and may OOM on a 24 GB card');
   banner($('edit-banner'), warnings.length ? 'busy' : '', warnings.map((w) => `• ${w}`).join('<br>'));
+  $('edit-view-edited').click();
 
   const fd = new FormData();
   fd.append('prompt', prompt);
@@ -463,7 +515,15 @@ async function runEdit() {
     if (!b64) throw new Error('reply carried no .data[0].b64_json');
     const url = 'data:image/png;base64,' + b64;
     const wall = (Date.now() - t0) / 1000;
-    showImage($('edit-frame'), $('edit-meta'), url, metricsHtml(data, wall), prompt);
+    const ref = state.refs[state.refs.length - 1] || {};
+    setEditPair({
+      referenceUrl: ref.url,
+      referenceLabel: ref.w ? `original ${ref.w}x${ref.h}` : 'original',
+      referenceCount: state.refs.length,
+      resultUrl: url,
+      resp: data,
+      wall,
+    });
     $('edit-download').disabled = false; $('edit-json').disabled = false;
     $('edit-jsonpre').textContent = JSON.stringify(data, null, 2);
     progress($('edit-progress'), '');
@@ -571,6 +631,7 @@ window.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('nav.tabs button').forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
 
   renderSizeSelects();
+  updateEditSizeHint();
   $('t2i-size').onchange = (e) => {
     syncCustomInput('t2i-size', 't2i-size-custom');
     $('t2i-size-hint').textContent = presetHeavy($('t2i-size'))
@@ -578,7 +639,8 @@ window.addEventListener('DOMContentLoaded', () => {
       : 'every preset keeps both sides a multiple of 32';
   };
   $('t2i-size-hint').textContent = 'every preset keeps both sides a multiple of 32';
-  $('edit-size').onchange = () => syncCustomInput('edit-size', 'edit-size-custom');
+  $('edit-size').onchange = () => { syncCustomInput('edit-size', 'edit-size-custom'); updateEditSizeHint(); };
+  $('edit-size-custom').oninput = updateEditSizeHint;
   $('chat-size').onchange = () => syncCustomInput('chat-size', 'chat-size-custom');
   $('t2i-random').onclick = () => { $('t2i-seed').value = Math.floor(Math.random() * 1e9); };
   $('t2i-cfg').oninput = () => {
@@ -604,8 +666,12 @@ window.addEventListener('DOMContentLoaded', () => {
   $('edit-run').onclick = runEdit;
   $('edit-download').onclick = () => {
     const img = $('edit-frame').querySelector('img');
-    if (img) download(img.src, `qwen-image-2.1-edit-${Date.now()}.png`);
+    if (!img) return;
+    const what = state.editView === 'original' ? 'original' : 'edit';
+    download(img.src, `qwen-image-2.1-${what}-${Date.now()}.png`);
   };
+  $('edit-view-original').onclick = () => showEditView('original');
+  $('edit-view-edited').onclick = () => showEditView('edited');
   $('edit-json').onclick = () => { $('edit-jsonbox').hidden = !$('edit-jsonbox').hidden; };
 
   $('chat-run').onclick = runChat;

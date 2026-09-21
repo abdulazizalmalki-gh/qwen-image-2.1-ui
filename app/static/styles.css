@@ -211,9 +211,27 @@ button.ghost:disabled { opacity: .45; cursor: not-allowed; }
 
 /* the result column must keep a usable preview at any window shape */
 .result { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+/* Original / Edited switch above the edit preview */
+.compare { display: inline-flex; gap: 0; align-self: flex-start; border: 1px solid var(--line); border-radius: 999px; background: var(--panel-2); padding: 3px; }
+.compare[hidden] { display: none; }
+.compare .seg {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: clamp(12px, 0.1vw + 11.7px, 13.5px);
+  padding: 6px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.compare .seg:hover { color: var(--text); }
+.compare .seg.active { background: var(--accent); color: #fff; font-weight: 600; }
+.compare .seg small { opacity: .8; font-family: var(--mono); font-size: .85em; }
 .result .frame {
   min-height: clamp(200px, 26vh, 340px);
-  max-height: 78vh;
+  max-height: 82vh;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: repeating-conic-gradient(#12171f 0% 25%, #171d26 0% 50%) 50%/22px 22px;
@@ -322,3 +340,8 @@ footer {
 .footer-note { margin-top: 14px; }
 .footer-note a { text-decoration: none; }
 .footer-note a:hover { text-decoration: underline; }
+
+/* edit preview: prefer height so original and edited frames are as large as the
+   column allows instead of being capped by the min-height */
+#edit-frame { min-height: clamp(240px, 46vh, 620px); }
+#edit-frame img { max-height: min(80vh, 1600px); }

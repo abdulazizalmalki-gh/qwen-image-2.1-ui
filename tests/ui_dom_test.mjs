@@ -15,6 +15,7 @@ const APP = fs.readFileSync(new URL('app/static/app.js', root), 'utf8');
 
 const calls = [];
 const b64 = Buffer.from('89504e470d0a1a0a' + '00'.repeat(64), 'hex').toString('base64');
+const b64Edited = Buffer.from('89504e470d0a1a0a' + '11'.repeat(64), 'hex').toString('base64');
 
 function reply(url, opts) {
   if (url.endsWith('/api/config')) {
@@ -23,7 +24,7 @@ function reply(url, opts) {
   if (url.endsWith('/api/health')) return json({ '/health': { status: 200 }, '/v1/models': { status: 200 } });
   if (url.endsWith('/api/metrics')) return new Response('vllm:num_requests_running 0\n', { status: 200, headers: { 'Content-Type': 'text/plain' } });
   if (url.endsWith('/api/generate')) return json({ data: [{ b64_json: b64 }], size: '1024x1024', output_format: 'png', metrics: { stage_durations: { queue_wait_ms: 0.4, stage_0_gen_ms: 65500 }, peak_memory_mb: 23620 } });
-  if (url.endsWith('/api/edit')) return json({ data: [{ b64_json: b64 }], size: '1024x1024', metrics: { stage_durations: { stage_0_gen_ms: 71000 }, peak_memory_mb: 23600 } });
+  if (url.endsWith('/api/edit')) return json({ data: [{ b64_json: b64Edited }], size: '1024x1024', metrics: { stage_durations: { stage_0_gen_ms: 71000 }, peak_memory_mb: 23600 } });
   if (url.endsWith('/api/chat-image')) return json({ choices: [{ message: { content: [{ type: 'image_url', image_url: { url: 'data:image/png;base64,' + b64 } }] } }], metrics: {} });
   return json({}, 404);
 }
@@ -135,19 +136,42 @@ await tick(); await tick();
 const editCall = calls.find((c) => c.url.endsWith('/api/edit'));
 check('edit posted multipart form data', !!editCall && editCall.opts.body instanceof window.FormData);
 check('edit carries 1 image + prompt', editCall && editCall.opts.body.getAll('images').length === 1 && editCall.opts.body.get('prompt').includes('FRESH BASIL'));
-check('edit image rendered', !!$('edit-frame').querySelector('img'));
+check('edit image rendered', !!$('edit-frame').querySelector('img') && $('edit-frame').querySelector('img').src.includes(b64Edited.slice(0, 16)));
 check('gallery collected every result', +$('gallery-count').textContent.replace(/\D/g, '') >= 4, $('gallery-count').textContent);
+
+// --- original vs edited toggle on the edit tab ------------------------------
+const editImg = () => $('edit-frame').querySelector('img');
+check('edit tab shows the Original/Edited toggle after a run', !$('edit-compare').hidden);
+check('Edited is the active view by default', $('edit-view-edited').classList.contains('active') && !$('edit-view-original').classList.contains('active'));
+const editedSrc = editImg().src;
+check('frame shows the edited result', editedSrc.startsWith('data:image/png;base64,'));
+$('edit-view-original').click();
+await tick();
+const originalSrc = editImg().src;
+check('Original shows the reference image instead', originalSrc !== editedSrc && originalSrc.startsWith('data:image/'), originalSrc.slice(0, 30));
+check('Original is now the active view', $('edit-view-original').classList.contains('active') && !$('edit-view-edited').classList.contains('active'));
+check('meta names the original view', $('edit-meta').textContent.includes('original'), $('edit-meta').textContent);
+$('edit-view-edited').click();
+await tick();
+check('toggling back restores the edited result', editImg().src === editedSrc);
+check('meta switches back to the run metrics', $('edit-meta').textContent.includes('generate'), $('edit-meta').textContent);
 
 // --- edit output size: same-as-reference and server-derived -----------------
 const editGroups = [...$('edit-size').querySelectorAll('optgroup')].map((g) => g.label);
 check('edit offers reference-driven size modes', editGroups.includes('from the reference image'), editGroups.join(' | '));
 const editSizeValues = [...$('edit-size').options].map((o) => o.value);
-check('edit has "same size as the reference image"', editSizeValues.includes('reference'));
+check('edit has a "reference size" mode', editSizeValues.includes('reference'));
 check('edit has "server-derived from reference aspect"', editSizeValues.includes('auto'));
 
 // jsdom cannot decode images, so inject the pixel size the browser would report
 window.eval("state.refs[state.refs.length - 1].w = 640; state.refs[state.refs.length - 1].h = 480; refreshReferenceSizeOption();");
-check('reference option is labelled with the pixel size', $('edit-size-reference-option').textContent.includes('640x480'), $('edit-size-reference-option').textContent);
+check('reference option stays short enough to fit the select', $('edit-size-reference-option').textContent === 'reference size', $('edit-size-reference-option').textContent);
+$('edit-size').value = 'reference';
+$('edit-size').onchange();
+check('the size hint reports the exact output pixels', $('edit-size-hint').textContent.includes('output 640x480'), $('edit-size-hint').textContent);
+$('edit-size').value = 'auto';
+$('edit-size').onchange();
+check('the hint explains the server-decided mode', $('edit-size-hint').textContent.includes('no size sent'), $('edit-size-hint').textContent);
 
 $('edit-size').value = 'reference';
 $('edit-run').click();
@@ -169,6 +193,11 @@ $('edit-run').click();
 await tick(); await tick();
 const customEdit = calls.filter((c) => c.url.endsWith('/api/edit')).pop();
 check('edit custom size snaps to the grid', customEdit.opts.body.get('size') === '992x992', String(customEdit.opts.body.get('size')));
+$('edit-view-original').click();
+await tick();
+check('Original label carries the reference pixels once known', $('edit-meta').textContent.includes('original 640x480'), $('edit-meta').textContent);
+$('edit-view-edited').click();
+await tick();
 
 $('edit-size').value = '1024x1024';
 $('edit-size').onchange();
