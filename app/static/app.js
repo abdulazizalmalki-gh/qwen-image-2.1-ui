@@ -356,6 +356,7 @@ async function refreshConfig() {
     state.config = c;
     $('api-pill').textContent = `api: ${c.api_base}`;
     $('model-name').textContent = c.model || 'no model id';
+    if ($('footer-model')) $('footer-model').textContent = c.model || 'no model id';
     dot.className = 'dot ' + (c.upstream_reachable && c.model ? 'ok' : 'bad');
     $('diag-upstream').textContent = c.upstream_reachable ? 'upstream reachable' : `upstream unreachable: ${c.detail || ''}`;
     $('diag-docs').href = c.api_base + '/docs';

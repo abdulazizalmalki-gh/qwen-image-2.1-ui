@@ -53,6 +53,10 @@ check('page has all four tabs', window.document.querySelectorAll('nav.tabs butto
 check('config applied: model id shown', $('model-name').textContent === 'Qwen/Qwen-Image-2.1', $('model-name').textContent);
 check('config applied: api base shown', $('api-pill').textContent.includes('model-box:8000'), $('api-pill').textContent);
 check('health dot is green', $('dot').className.includes('ok'), $('dot').className);
+check('footer credits the recipe this UI was built for',
+  !!$('footer-model') && window.document.querySelector('.footer-note a').href === 'https://recipes.vllm.ai/Qwen/Qwen-Image-2.1',
+  window.document.querySelector('.footer-note a').href);
+check('footer names the served model', $('footer-model').textContent === 'Qwen/Qwen-Image-2.1', $('footer-model').textContent);
 
 // --- text to image, including the CFG warning path --------------------------
 $('t2i-prompt').value = 'a ceramic teapot on a wooden table';

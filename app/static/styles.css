@@ -268,12 +268,15 @@ details summary { cursor: pointer; color: var(--muted); font-size: clamp(12px, 0
 
 footer {
   flex: 0 0 auto;
+  /* width:100% is required: auto cross-axis margins on a flex item suppress
+     stretching, which shrank the footer to its text width instead of the page */
+  width: 100%;
+  max-width: var(--shell);
+  margin: 0 auto;
   color: var(--muted);
   font-size: clamp(11px, 0.1vw + 10.7px, 12.5px);
   padding: 15px var(--pad);
   border-top: 1px solid var(--line);
-  max-width: var(--shell);
-  margin: 0 auto;
 }
 
 /* ---------------------------------------------------------------- narrow */
@@ -315,3 +318,7 @@ footer {
 @media (max-width: 1080px) and (orientation: portrait) {
   .result .frame { min-height: clamp(220px, 30vh, 420px); }
 }
+
+.footer-note { margin-top: 14px; }
+.footer-note a { text-decoration: none; }
+.footer-note a:hover { text-decoration: underline; }

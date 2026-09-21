@@ -3,6 +3,12 @@
 A small web UI for poking at a **Qwen-Image-2.1** model served by
 [vLLM-Omni](https://github.com/vllm-project/vllm-omni) over its OpenAI-compatible API.
 
+Built for the vLLM recipe **<https://recipes.vllm.ai/Qwen/Qwen-Image-2.1>**
+(model `Qwen/Qwen-Image-2.1`, served as `vllm serve Qwen/Qwen-Image-2.1 --omni`). The recipe
+hands you an API and a set of curl commands; this is the front end for actually driving it —
+including the parts that are easy to get wrong (the 32-grid size rule, `true_cfg_scale` only
+with a negative prompt, multipart edits, the reference-image output size).
+
 This repository ships **the UI only** — no model weights, no inference server, no
 CUDA code. You point it at a model server you already run.
 
@@ -98,7 +104,8 @@ configuration and lets the multipart edit call be rebuilt server-side.
 The server must expose `POST /v1/images/generations`, `POST /v1/images/edits`
 (multipart only — a JSON body to that route resets the connection) and
 `POST /v1/chat/completions` with `modalities: ["image"]`. Any OpenAI-compatible
-image endpoint with that shape works; the reference setup is:
+image endpoint with that shape works; the reference setup is the
+[Qwen-Image-2.1 recipe](https://recipes.vllm.ai/Qwen/Qwen-Image-2.1):
 
 ```bash
 docker run --gpus all --privileged --ipc=host -p 8000:8000 \

@@ -1,8 +1,13 @@
 # Notes on standing up the model server this UI expects
 
-These are findings from running `Qwen/Qwen-Image-2.1` with `vLLM-Omni` on consumer
-Ampere cards. They are not requirements of the UI — they are the traps we hit, so
-you do not have to rediscover them.
+Recipe: <https://recipes.vllm.ai/Qwen/Qwen-Image-2.1> — model `Qwen/Qwen-Image-2.1`
+(7.1B DiT + Qwen3-VL-8B text encoder + 16x RGBA VAE) served by vLLM-Omni's OpenAI-compatible
+API. The recipe's fp8 variant is online quantization of that one checkpoint, not a separate
+FP8 repo, and it needs the `vllm/vllm-omni:qwen-image21` image because upstream PR #7759 was
+still unmerged.
+
+These are findings from running that recipe on consumer Ampere cards (2x RTX 3090). They are
+not requirements of the UI — they are the traps we hit, so you do not have to rediscover them.
 
 ## Support ships only in the container image
 
