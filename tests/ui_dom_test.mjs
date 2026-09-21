@@ -242,7 +242,7 @@ await tick();
 check('Esc closes the viewer', $('lightbox').hidden);
 
 $('lightbox').hidden = true;
-document.querySelectorAll('#gallery .thumb')[0].click();
+window.document.querySelectorAll('#gallery .thumb')[0].click();
 await tick();
 $('lb-open').click();
 await tick();
@@ -256,6 +256,13 @@ await tick(); await tick();
 check('diagnostics loaded health', $('diag-health').textContent.includes('/v1/models'), $('diag-health').textContent.slice(0, 60));
 check('diagnostics loaded metrics', $('diag-metrics').textContent.includes('vllm:num_requests_running'));
 check('docs link points at the model server', $('diag-docs').href === 'http://model-box:8000/docs', $('diag-docs').href);
+
+// keep the README's stated DOM-check count honest: adding a check without updating
+// the number now fails the suite (this check counted itself, so the values match)
+const readme = fs.readFileSync(new URL('README.md', root), 'utf8');
+const stated = /(\d+) DOM checks/.exec(readme);
+const total = results.length + 1;   // this check counts itself
+check(`README states the real DOM check count (${total})`, !!stated && Number(stated[1]) === total, stated ? stated[0] : 'no count stated in README.md');
 
 const failed = results.filter(([, ok]) => !ok);
 console.log(`\n${results.length - failed.length}/${results.length} checks passed`);

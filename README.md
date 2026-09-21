@@ -171,7 +171,7 @@ Notes learned the hard way (full detail in `docs/model-server-notes.md`):
 ## Tests
 
 ```bash
-npm install && npm test                                        # 58 DOM checks, no model, no GPU
+npm install && npm test                                        # 73 DOM checks, no model, no GPU
 python3 scripts/smoke_test.py --ui-url http://localhost:8080   # needs a live model server
 python3 scripts/privacy_scan.py                                # repo / image scan
 ```
