@@ -28,10 +28,16 @@ browser  ->  this UI (FastAPI + static page)  ->  vLLM-Omni server (/v1/...)
 | Diagnostics | `/health`, `/v1/models`, `/metrics` | live server state, Prometheus output, link to the server's Swagger UI |
 
 Plus: server/model auto-detection (nothing about your deployment is hardcoded), per-request wall
-time and the server's own `stage_0_gen_ms` / `queue_wait_ms` / `peak_memory_mb` metrics, a session
-gallery, PNG download, "send result to the edit tab", the **Original / Edited** switch after an
-edit, and client-side validation (sizes floored onto the 32 grid, ≤ 4 reference images, CFG>1
-warns unless you supply a negative prompt).
+time and the server's own `stage_0_gen_ms` / `queue_wait_ms` / `peak_memory_mb` metrics, PNG
+download, "send result to the edit tab", the **Original / Edited** switch after an edit, and
+client-side validation (sizes floored onto the 32 grid, ≤ 4 reference images, CFG>1 warns unless
+you supply a negative prompt).
+
+Every result also lands in a **session gallery** in the footer. Click a thumbnail to open it
+full-size: the viewer shows the picture at up to viewport size with a meta line (kind, size,
+generate and wall time, prompt), steps through the session's other results with the arrows or
+←/→, closes on Esc or a click outside, and can download the PNG or hand the picture back to the
+tab it came from ("Open in its tab", which also switches to that pane).
 
 ## Running it
 

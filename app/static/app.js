@@ -2,7 +2,7 @@
 'use strict';
 
 const $ = (id) => document.getElementById(id);
-const state = { config: null, refs: [], chatRefs: [], gallery: [], seq: 0, lastEdit: null, editView: 'edited' };
+const state = { config: null, refs: [], chatRefs: [], gallery: [], seq: 0, lastEdit: null, editView: 'edited', lightboxIndex: -1 };
 
 /* Size presets. Both dimensions MUST be multiples of 32 — the model's VAE is a 16x
    autoencoder and vLLM-Omni floors each side otherwise (measured: 1280x720 renders
@@ -321,26 +321,82 @@ function addToGallery(entry) {
   const wrap = $('gallery');
   const el = document.createElement('div');
   el.className = 'thumb';
-  el.title = entry.prompt || entry.kind;
-  el.innerHTML = `<img src="${entry.dataUrl}" alt="${entry.kind}" />`;
-  el.onclick = () => {
-    document.querySelectorAll('#gallery .thumb').forEach((n) => n.classList.remove('active'));
-    el.classList.add('active');
-    if (entry.kind === 'edit') {
-      showImage($('edit-frame'), $('edit-meta'), entry.dataUrl, metricsHtml(entry.resp, entry.wall), entry.prompt);
-      $('edit-download').disabled = false; $('edit-json').disabled = false; $('edit-jsonpre').textContent = JSON.stringify(entry.resp, null, 2);
-    } else if (entry.kind === 'chat') {
-      showImage($('chat-frame'), $('chat-meta'), entry.dataUrl, metricsHtml(entry.resp, entry.wall), entry.prompt);
-      $('chat-download').disabled = false; $('chat-json').disabled = false; $('chat-jsonpre').textContent = JSON.stringify(entry.resp, null, 2);
-    } else {
-      showImage($('t2i-frame'), $('t2i-meta'), entry.dataUrl, metricsHtml(entry.resp, entry.wall), entry.prompt);
-      state.lastT2i = entry.dataUrl;
-      $('t2i-download').disabled = false; $('t2i-to-edit').disabled = false; $('t2i-json').disabled = false;
-      $('t2i-jsonpre').textContent = JSON.stringify(entry.resp, null, 2);
-    }
-  };
+  el.tabIndex = 0;
+  el.dataset.index = String(state.gallery.length - 1);
+  el.setAttribute('role', 'button');
+  el.setAttribute('aria-label', `${entry.kind} result — open larger`);
+  el.innerHTML = `<img src="${entry.dataUrl}" alt="${entry.kind} result" />`;
+  const open = () => openLightbox(Number(el.dataset.index));
+  el.onclick = open;
+  el.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); open(); } };
   wrap.prepend(el);
   $('gallery-count').textContent = `(${state.gallery.length})`;
+}
+
+/* ---- gallery viewer ------------------------------------------------------- */
+
+function entrySize(entry) {
+  const fromResp = entry.resp && entry.resp.size;
+  if (fromResp) return fromResp;
+  const img = $('lb-img');
+  return img && img.naturalWidth ? `${img.naturalWidth}x${img.naturalHeight}` : '';
+}
+
+function renderLightbox() {
+  const i = state.lightboxIndex;
+  const entry = state.gallery[i];
+  if (!entry) return closeLightbox();
+  $('lb-img').src = entry.dataUrl;
+  const bits = [entry.kind, entrySize(entry)];
+  const sd = ((entry.resp || {}).metrics || {}).stage_durations || {};
+  if (sd.stage_0_gen_ms != null) bits.push(`generate ${(sd.stage_0_gen_ms / 1000).toFixed(1)} s`);
+  if (entry.wall != null) bits.push(`wall ${entry.wall.toFixed(1)} s`);
+  if (entry.prompt) bits.push(`“${entry.prompt}”`);
+  $('lb-meta').textContent = bits.filter(Boolean).join(' · ');
+  $('lb-prev').disabled = i <= 0;
+  $('lb-next').disabled = i >= state.gallery.length - 1;
+}
+
+function openLightbox(index) {
+  if (!state.gallery[index]) return;
+  state.lightboxIndex = index;
+  renderLightbox();
+  $('lightbox').hidden = false;
+  document.body.style.overflow = 'hidden';
+  $('lb-close').focus();
+}
+
+function closeLightbox() {
+  state.lightboxIndex = -1;
+  $('lightbox').hidden = true;
+  document.body.style.overflow = '';
+}
+
+function stepLightbox(delta) {
+  const next = state.lightboxIndex + delta;
+  if (state.gallery[next]) openLightbox(next);
+}
+
+/* put the current gallery entry back into the tab it came from, and show that tab */
+function openEntryInItsTab(entry) {
+  if (!entry) return;
+  closeLightbox();
+  const resp = entry.resp;
+  if (entry.kind === 'edit') {
+    showImage($('edit-frame'), $('edit-meta'), entry.dataUrl, metricsHtml(resp, entry.wall), entry.prompt);
+    $('edit-download').disabled = false; $('edit-json').disabled = false; $('edit-jsonpre').textContent = JSON.stringify(resp, null, 2);
+    showTab('edit');
+  } else if (entry.kind === 'chat') {
+    showImage($('chat-frame'), $('chat-meta'), entry.dataUrl, metricsHtml(resp, entry.wall), entry.prompt);
+    $('chat-download').disabled = false; $('chat-json').disabled = false; $('chat-jsonpre').textContent = JSON.stringify(resp, null, 2);
+    showTab('chat');
+  } else {
+    showImage($('t2i-frame'), $('t2i-meta'), entry.dataUrl, metricsHtml(resp, entry.wall), entry.prompt);
+    state.lastT2i = entry.dataUrl;
+    $('t2i-download').disabled = false; $('t2i-to-edit').disabled = false; $('t2i-json').disabled = false;
+    $('t2i-jsonpre').textContent = JSON.stringify(resp, null, 2);
+    showTab('t2i');
+  }
 }
 
 /* ---------------------------------------------------------------- refs */
@@ -680,6 +736,22 @@ window.addEventListener('DOMContentLoaded', () => {
     if (img) download(img.src, `qwen-image-2.1-chat-${Date.now()}.png`);
   };
   $('chat-json').onclick = () => { $('chat-jsonbox').hidden = !$('chat-jsonbox').hidden; };
+
+  $('lb-close').onclick = closeLightbox;
+  $('lb-prev').onclick = () => stepLightbox(-1);
+  $('lb-next').onclick = () => stepLightbox(1);
+  $('lb-download').onclick = () => {
+    const cur = state.gallery[state.lightboxIndex];
+    if (cur) download(cur.dataUrl, `qwen-image-2.1-${cur.kind}-${Date.now()}.png`);
+  };
+  $('lb-open').onclick = () => openEntryInItsTab(state.gallery[state.lightboxIndex]);
+  $('lightbox').onclick = (ev) => { if (ev.target === $('lightbox')) closeLightbox(); };
+  window.addEventListener('keydown', (ev) => {
+    if ($('lightbox').hidden) return;
+    if (ev.key === 'Escape') closeLightbox();
+    else if (ev.key === 'ArrowLeft') stepLightbox(-1);
+    else if (ev.key === 'ArrowRight') stepLightbox(1);
+  });
 
   $('diag-reload').onclick = loadDiag;
   $('refresh').onclick = refreshConfig;

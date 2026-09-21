@@ -211,6 +211,45 @@ check('chat posted to /api/chat-image', calls.some((c) => c.url.endsWith('/api/c
 check('chat image extracted from message.content[0].image_url', !!$('chat-frame').querySelector('img'));
 check('chat raw json visible', $('chat-jsonpre').textContent.includes('image_url'));
 
+// --- gallery viewer ----------------------------------------------------------
+const thumbs = [...window.document.querySelectorAll('#gallery .thumb')];
+check('gallery has thumbnails to open', thumbs.length >= 4, String(thumbs.length));
+check('thumbnails carry no native tooltip (that was the \"popup\")', thumbs.every((t) => !t.hasAttribute('title')));
+check('the viewer starts closed', $('lightbox').hidden);
+
+thumbs[0].click();
+await tick();
+check('clicking a thumbnail opens the viewer', !$('lightbox').hidden);
+const openedSrc = $('lb-img').src;
+check('the viewer shows that entry, full size', openedSrc === thumbs[0].querySelector('img').src, openedSrc.slice(0, 24));
+check('the viewer names the kind and the prompt', /(edit|chat)/.test($('lb-meta').textContent) && $('lb-meta').textContent.includes('green apple'), $('lb-meta').textContent);
+// jsdom cannot decode images, so the natural-size fallback is untestable here;
+// an entry whose response reports its size must still show it
+thumbs[1].click();
+await tick();
+check('the viewer shows the size when the response reports one', $('lb-meta').textContent.includes('1024x1024'), $('lb-meta').textContent);
+thumbs[0].click();
+await tick();
+check('prev is enabled but next is not on the newest entry', !$('lb-prev').disabled && $('lb-next').disabled);
+
+$('lb-prev').click();
+await tick();
+check('prev steps to another entry', $('lb-img').src !== openedSrc);
+check('next becomes available after stepping back', !$('lb-next').disabled);
+
+window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
+await tick();
+check('Esc closes the viewer', $('lightbox').hidden);
+
+$('lightbox').hidden = true;
+document.querySelectorAll('#gallery .thumb')[0].click();
+await tick();
+$('lb-open').click();
+await tick();
+check('"Open in its tab" shows the matching pane', $('chat').classList.contains('active'), [...window.document.querySelectorAll('.tabpane.active')].map((p) => p.id).join());
+check('and loads the picture into that pane', !!$('chat-frame').querySelector('img'));
+check('the viewer closed when handing off', $('lightbox').hidden);
+
 // --- diagnostics ------------------------------------------------------------
 window.document.querySelector('nav.tabs button[data-tab="diag"]').click();
 await tick(); await tick();

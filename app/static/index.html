@@ -222,6 +222,22 @@
     </div>
   </footer>
 
+  <!-- gallery viewer: a real full-size view instead of a tooltip -->
+  <div class="lightbox" id="lightbox" hidden role="dialog" aria-modal="true" aria-label="gallery image">
+    <button class="lb-nav lb-prev" id="lb-prev" title="previous (left arrow)" aria-label="previous">&#8249;</button>
+    <figure class="lb-figure">
+      <img id="lb-img" alt="gallery image" />
+      <figcaption class="lb-bar">
+        <span id="lb-meta"></span>
+        <span class="lb-spacer"></span>
+        <button class="ghost" id="lb-open">Open in its tab</button>
+        <button class="ghost" id="lb-download">Download PNG</button>
+        <button class="ghost" id="lb-close">Close (Esc)</button>
+      </figcaption>
+    </figure>
+    <button class="lb-nav lb-next" id="lb-next" title="next (right arrow)" aria-label="next">&#8250;</button>
+  </div>
+
   <script src="/app.js"></script>
 </body>
 </html>
