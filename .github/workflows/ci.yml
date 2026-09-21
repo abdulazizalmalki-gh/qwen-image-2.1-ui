@@ -66,6 +66,8 @@ jobs:
         with:
           images: ${{ env.IMAGE }}
           tags: |
+            # latest only on the default branch, so a pull never silently follows a PR
+            type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=branch
             type=ref,event=pr
             type=semver,pattern={{version}}
