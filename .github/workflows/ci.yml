@@ -1,0 +1,151 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  # Offline checks: the DOM tests drive the real page in jsdom, and the privacy
+  # scan refuses to let this deployment's own values reach the repo or an image.
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: DOM tests (jsdom, no GPU, no model server)
+        run: |
+          npm install --no-audit --no-fund
+          npm test
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Python syntax check
+        run: python3 -m py_compile app/main.py scripts/smoke_test.py scripts/privacy_scan.py
+
+      - name: Privacy scan (repo)
+        run: python3 scripts/privacy_scan.py
+
+  build:
+    needs: tests
+    runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3       # arm64 on an amd64 runner
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tags and labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=sha,format=short
+
+      - name: Build and push (linux/amd64, linux/arm64)
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: true
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summary
+        run: |
+          echo "### image" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "${IMAGE}@${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "${{ steps.meta.outputs.tags }}" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+  # Boot the published artifact and prove it serves, then scan its own filesystem
+  # so nothing private can ship inside a layer.
+  smoke:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run the image (no model server needed to boot)
+        run: |
+          IMAGE_REF="${IMAGE}@${{ needs.build.outputs.digest }}"
+          echo "booting $IMAGE_REF"
+          docker run -d --name ui --no-healthcheck -p 8080:8080 \
+            -e QWEN_IMAGE_API=http://127.0.0.1:9 \
+            "$IMAGE_REF"
+          code=""
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/ || true)
+            [ "$code" = "200" ] && break
+            sleep 2
+          done
+          echo "GET / -> $code"
+          [ "$code" = "200" ] || { docker logs ui; exit 1; }
+
+      - name: Serves the console and reports its config
+        run: |
+          curl -fsS http://127.0.0.1:8080/ | grep -q "test console"
+          curl -fsS http://127.0.0.1:8080/app.js | head -c 200 >/dev/null
+          curl -fsS http://127.0.0.1:8080/styles.css >/dev/null
+          # an unreachable model server must degrade to upstream_reachable:false
+          cfg=$(curl -fsS http://127.0.0.1:8080/api/config)
+          echo "$cfg"
+          echo "$cfg" | grep -q '"upstream_reachable":false'
+
+      - name: Runs as a non-root user
+        run: |
+          user=$(docker inspect ui --format '{{.Config.User}}')
+          echo "container user: ${user:-<default/root>}"
+          [ "$user" = "appuser" ] || { echo "expected a non-root user"; exit 1; }
+
+      - name: Privacy scan inside the image
+        run: |
+          docker run --rm --entrypoint python3 \
+            -v "$PWD/scripts:/scan:ro" "${IMAGE}@${{ needs.build.outputs.digest }}" \
+            /scan/privacy_scan.py --root /app
+
+      - name: Logs on failure
+        if: failure()
+        run: docker logs ui || true

@@ -1,5 +1,7 @@
 # Qwen-Image-2.1 test console
 
+[![ci](https://github.com/abdulazizalmalki-gh/qwen-image-2.1-ui/actions/workflows/ci.yml/badge.svg)](https://github.com/abdulazizalmalki-gh/qwen-image-2.1-ui/actions/workflows/ci.yml)
+
 A small web UI for poking at a **Qwen-Image-2.1** model served by
 [vLLM-Omni](https://github.com/vllm-project/vllm-omni) over its OpenAI-compatible API.
 
@@ -154,6 +156,23 @@ After a run the edit preview grows an **Original / Edited** switch: both images 
 client-side (the reference that was actually sent, and the result) and either one is rendered as
 large as the column allows, with the meta line saying which you are looking at (`original
 1216x704`, or the run's metrics for the edited frame). Download saves whichever is on screen.
+
+## CI
+
+`.github/workflows/ci.yml` runs on every push, PR and tag:
+
+- **tests** — the jsdom DOM suite (`npm test`), a Python syntax check, and
+  `scripts/privacy_scan.py`, which fails the build if this deployment's own values (LAN
+  prefixes, house host names, service ports, home paths, credential shapes) appear anywhere
+  in the repo. Scan it against a deliberately leaky tree to see it work: it exits non-zero
+  and names file, line and rule.
+- **build** — `linux/amd64` + `linux/arm64` via BuildKit, pushed to GHCR with `latest` on the
+  default branch plus branch/PR and `sha-…` tags, with SBOM and provenance attached.
+- **smoke** — boots the pushed image *by digest* (no model server needed), asserts `/`,
+  `/app.js` and `/styles.css` serve, that an unreachable model server degrades cleanly to
+  `"upstream_reachable":false`, that the container runs as the non-root `appuser`, and then
+  re-runs the privacy scan inside the image's `/app` so nothing private can ride along in a
+  layer.
 
 ## Layout and window shapes
 
