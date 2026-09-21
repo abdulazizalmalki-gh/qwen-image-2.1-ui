@@ -77,6 +77,29 @@ check('download + send-to-edit became enabled', !$('t2i-download').disabled && !
 check('warning banner survived the run', $('t2i-banner').textContent.includes('negative prompt'), $('t2i-banner').textContent);
 check('gallery has 1 item', $('gallery-count').textContent === '(1)', $('gallery-count').textContent);
 
+// --- clear button on the prompt ---------------------------------------------
+check('the clear button starts hidden on an empty prompt', $('t2i-prompt-clear').hidden);
+$('t2i-prompt').value = 'a ceramic teapot';
+$('t2i-prompt').dispatchEvent(new window.Event('input'));
+await tick();
+check('typing reveals the clear button', !$('t2i-prompt-clear').hidden);
+check('it is a real button, not a submit', $('t2i-prompt-clear').type === 'button');
+$('t2i-prompt-clear').click();
+await tick();
+check('clicking it empties the prompt', $('t2i-prompt').value === '', JSON.stringify($('t2i-prompt').value));
+check('and hides itself again', $('t2i-prompt-clear').hidden);
+check('focus returns to the prompt field', window.document.activeElement === $('t2i-prompt'), window.document.activeElement && window.document.activeElement.id);
+$('t2i-prompt').value = 'x';
+$('t2i-prompt').dispatchEvent(new window.Event('input'));
+await tick();
+check('it comes back when text returns', !$('t2i-prompt-clear').hidden);
+$('t2i-prompt-clear').click();
+await tick();
+// leave a prompt in place: the size tests below generate
+$('t2i-prompt').value = 'a ceramic teapot on a wooden table';
+$('t2i-prompt').dispatchEvent(new window.Event('input'));
+await tick();
+
 // --- size presets -----------------------------------------------------------
 const presetGroups = [...$('t2i-size').querySelectorAll('optgroup')].map((g) => g.label);
 const allPresets = [...$('t2i-size').querySelectorAll('optgroup option')].map((o) => o.value).filter((v) => /^\d+x\d+$/.test(v));

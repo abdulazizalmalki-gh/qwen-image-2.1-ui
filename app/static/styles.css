@@ -400,3 +400,29 @@ footer {
 
 .gallery .thumb:hover, .gallery .thumb:focus-visible { outline: 2px solid var(--accent); }
 .gallery .thumb { cursor: zoom-in; }
+
+/* ---------------------------------------------------------------- field clear */
+
+.field { position: relative; }
+.field textarea { padding-right: 38px; }     /* keep the text clear of the button */
+.clear-field {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.clear-field[hidden] { display: none; }
+.clear-field:hover { color: var(--text); border-color: var(--accent); }
+.clear-field:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

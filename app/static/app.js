@@ -723,6 +723,18 @@ window.addEventListener('DOMContentLoaded', () => {
   $('edit-size-custom').oninput = updateEditSizeHint;
   $('chat-size').onchange = () => syncCustomInput('chat-size', 'chat-size-custom');
   $('t2i-random').onclick = () => { $('t2i-seed').value = Math.floor(Math.random() * 1e9); };
+
+  // clear control on the prompt: only shown when there is something to clear
+  const promptField = $('t2i-prompt');
+  const promptClear = $('t2i-prompt-clear');
+  const syncPromptClear = () => { promptClear.hidden = promptField.value.length === 0; };
+  promptField.addEventListener('input', syncPromptClear);
+  promptClear.onclick = () => {
+    promptField.value = '';
+    syncPromptClear();
+    promptField.focus();
+  };
+  syncPromptClear();
   $('t2i-cfg').oninput = () => {
     const v = num($('t2i-cfg').value) || 1;
     $('t2i-cfg-hint').className = 'hint' + (v > 1 ? ' warn' : '');

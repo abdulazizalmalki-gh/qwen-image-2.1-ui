@@ -28,7 +28,10 @@
       <div class="grid">
         <div>
           <label for="t2i-prompt">Prompt</label>
-          <textarea id="t2i-prompt" placeholder="A ceramic teapot on a wooden table, soft window light"></textarea>
+          <div class="field">
+            <textarea id="t2i-prompt" placeholder="A ceramic teapot on a wooden table, soft window light"></textarea>
+            <button type="button" class="clear-field" id="t2i-prompt-clear" title="clear the prompt" aria-label="clear the prompt" hidden>&#215;</button>
+          </div>
 
           <label for="t2i-negative">Negative prompt <span class="hint">(only used when CFG &gt; 1)</span></label>
           <textarea id="t2i-negative" placeholder="blurry, low detail, watermark" style="min-height:52px"></textarea>
