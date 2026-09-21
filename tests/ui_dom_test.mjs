@@ -250,6 +250,36 @@ check('"Open in its tab" shows the matching pane', $('chat').classList.contains(
 check('and loads the picture into that pane', !!$('chat-frame').querySelector('img'));
 check('the viewer closed when handing off', $('lightbox').hidden);
 
+// --- reference images are viewable too --------------------------------------
+// give the chat tab a reference picture the way an upload would
+window.eval("state.chatRefs = [{ url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==', name: 'chat-ref.png', w: 320, h: 240 }]; refBox('chat');");
+await tick();
+const chatRefThumb = window.document.querySelector('#chat-thumbs .thumb');
+check('chat reference has a viewable thumbnail', !!chatRefThumb);
+chatRefThumb.click();
+await tick();
+check('clicking a chat reference opens the viewer', !$('lightbox').hidden);
+check('the viewer shows the reference picture', $('lb-img').src.includes('iVBORw0KGgoAAAANSUhEUg=='), $('lb-img').src.slice(0, 40));
+check('its meta says what it is and its size', $('lb-meta').textContent.includes('reference image') && $('lb-meta').textContent.includes('320x240') && $('lb-meta').textContent.includes('chat-ref.png'), $('lb-meta').textContent);
+check('"Open in its tab" is hidden for a reference (nothing to hand back)', $('lb-open').hidden);
+window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
+await tick();
+check('Esc closes the reference viewer', $('lightbox').hidden);
+
+// the remove button must still remove, not open the viewer
+chatRefThumb.querySelector('button').click();
+await tick();
+check('the × removes the reference without opening the viewer', $('lightbox').hidden && window.document.querySelectorAll('#chat-thumbs .thumb').length === 0);
+
+// edit-tab references behave the same way
+const editRefThumb = window.document.querySelector('#edit-thumbs .thumb');
+check('edit reference has a viewable thumbnail', !!editRefThumb);
+editRefThumb.click();
+await tick();
+check('clicking an edit reference opens the viewer', !$('lightbox').hidden && $('lb-meta').textContent.includes('reference image'), $('lb-meta').textContent);
+window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
+await tick();
+
 // --- diagnostics ------------------------------------------------------------
 window.document.querySelector('nav.tabs button[data-tab="diag"]').click();
 await tick(); await tick();

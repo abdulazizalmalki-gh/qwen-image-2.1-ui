@@ -33,11 +33,13 @@ download, "send result to the edit tab", the **Original / Edited** switch after 
 client-side validation (sizes floored onto the 32 grid, ≤ 4 reference images, CFG>1 warns unless
 you supply a negative prompt).
 
-Every result also lands in a **session gallery** in the footer. Click a thumbnail to open it
-full-size: the viewer shows the picture at up to viewport size with a meta line (kind, size,
-generate and wall time, prompt), steps through the session's other results with the arrows or
-←/→, closes on Esc or a click outside, and can download the PNG or hand the picture back to the
-tab it came from ("Open in its tab", which also switches to that pane).
+Every result also lands in a **session gallery** in the footer, and uploaded reference images on
+the edit and chat tabs are openable the same way. Click any thumbnail to open it full-size: the
+viewer shows the picture at up to viewport size with a meta line (kind, size, timings, prompt —
+or "reference image" with its pixels and filename), steps through that set with the arrows or
+←/→, closes on Esc or a click outside, and can download the PNG. For a gallery result it can also
+hand the picture back to the tab it came from ("Open in its tab", which switches to that pane);
+that action is hidden for references, which have no result pane of their own.
 
 ## Running it
 
@@ -171,7 +173,7 @@ Notes learned the hard way (full detail in `docs/model-server-notes.md`):
 ## Tests
 
 ```bash
-npm install && npm test                                        # 73 DOM checks, no model, no GPU
+npm install && npm test                                        # 82 DOM checks, no model, no GPU
 python3 scripts/smoke_test.py --ui-url http://localhost:8080   # needs a live model server
 python3 scripts/privacy_scan.py                                # repo / image scan
 ```

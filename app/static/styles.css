@@ -194,6 +194,8 @@ button.ghost:disabled { opacity: .45; cursor: not-allowed; }
 }
 #drop.over, #chat-drop.over { border-color: var(--accent); color: var(--text); }
 .thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.thumbs .thumb { cursor: zoom-in; }
+.thumbs .thumb:hover, .thumbs .thumb:focus-visible { outline: 2px solid var(--accent); }
 .thumb {
   position: relative;
   width: clamp(58px, 4.6vw, 84px);

@@ -2,7 +2,7 @@
 'use strict';
 
 const $ = (id) => document.getElementById(id);
-const state = { config: null, refs: [], chatRefs: [], gallery: [], seq: 0, lastEdit: null, editView: 'edited', lightboxIndex: -1 };
+const state = { config: null, refs: [], chatRefs: [], gallery: [], seq: 0, lastEdit: null, editView: 'edited', viewer: { items: [], index: -1 } };
 
 /* Size presets. Both dimensions MUST be multiples of 32 — the model's VAE is a 16x
    autoencoder and vLLM-Omni floors each side otherwise (measured: 1280x720 renders
@@ -326,61 +326,77 @@ function addToGallery(entry) {
   el.setAttribute('role', 'button');
   el.setAttribute('aria-label', `${entry.kind} result — open larger`);
   el.innerHTML = `<img src="${entry.dataUrl}" alt="${entry.kind} result" />`;
-  const open = () => openLightbox(Number(el.dataset.index));
+  const open = () => openViewer(collectGalleryItems(), Number(el.dataset.index));
   el.onclick = open;
   el.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); open(); } };
   wrap.prepend(el);
   $('gallery-count').textContent = `(${state.gallery.length})`;
 }
 
-/* ---- gallery viewer ------------------------------------------------------- */
+/* ---- viewer (gallery results and reference images) ------------------------- */
 
-function entrySize(entry) {
-  const fromResp = entry.resp && entry.resp.size;
-  if (fromResp) return fromResp;
+/* anything openable is normalised to { dataUrl, label, ..., entry? } */
+function collectGalleryItems() {
+  return state.gallery.map((e) => ({
+    dataUrl: e.dataUrl, label: e.kind, resp: e.resp, wall: e.wall, prompt: e.prompt, entry: e,
+  }));
+}
+
+function collectRefItems(kind) {
+  const list = kind === 'chat' ? state.chatRefs : state.refs;
+  return list.map((r) => ({ dataUrl: r.url, label: 'reference image', w: r.w, h: r.h, name: r.name }));
+}
+
+function itemSize(item) {
+  if ((item.resp || {}).size) return item.resp.size;
+  if (item.w && item.h) return `${item.w}x${item.h}`;
   const img = $('lb-img');
-  return img && img.naturalWidth ? `${img.naturalWidth}x${img.naturalHeight}` : '';
+  if (img && img.naturalWidth) return `${img.naturalWidth}x${img.naturalHeight}`;
+  return '';
 }
 
-function renderLightbox() {
-  const i = state.lightboxIndex;
-  const entry = state.gallery[i];
-  if (!entry) return closeLightbox();
-  $('lb-img').src = entry.dataUrl;
-  const bits = [entry.kind, entrySize(entry)];
-  const sd = ((entry.resp || {}).metrics || {}).stage_durations || {};
+function renderViewer() {
+  const { items, index } = state.viewer;
+  const item = items[index];
+  if (!item) return closeViewer();
+
+  $('lb-img').src = item.dataUrl;
+  const bits = [item.label, itemSize(item), item.name];
+  const sd = ((item.resp || {}).metrics || {}).stage_durations || {};
   if (sd.stage_0_gen_ms != null) bits.push(`generate ${(sd.stage_0_gen_ms / 1000).toFixed(1)} s`);
-  if (entry.wall != null) bits.push(`wall ${entry.wall.toFixed(1)} s`);
-  if (entry.prompt) bits.push(`“${entry.prompt}”`);
+  if (item.wall != null) bits.push(`wall ${item.wall.toFixed(1)} s`);
+  if (item.prompt) bits.push(`“${item.prompt}”`);
   $('lb-meta').textContent = bits.filter(Boolean).join(' · ');
-  $('lb-prev').disabled = i <= 0;
-  $('lb-next').disabled = i >= state.gallery.length - 1;
+
+  $('lb-open').hidden = !item.entry;            // only gallery results can go back to a tab
+  $('lb-prev').disabled = index <= 0;
+  $('lb-next').disabled = index >= items.length - 1;
 }
 
-function openLightbox(index) {
-  if (!state.gallery[index]) return;
-  state.lightboxIndex = index;
-  renderLightbox();
+function openViewer(items, index) {
+  if (!items || !items[index]) return;
+  state.viewer = { items, index };
+  renderViewer();
   $('lightbox').hidden = false;
   document.body.style.overflow = 'hidden';
   $('lb-close').focus();
 }
 
-function closeLightbox() {
-  state.lightboxIndex = -1;
+function closeViewer() {
+  state.viewer = { items: [], index: -1 };
   $('lightbox').hidden = true;
   document.body.style.overflow = '';
 }
 
-function stepLightbox(delta) {
-  const next = state.lightboxIndex + delta;
-  if (state.gallery[next]) openLightbox(next);
+function stepViewer(delta) {
+  const next = state.viewer.index + delta;
+  if (state.viewer.items[next]) openViewer(state.viewer.items, next);
 }
 
-/* put the current gallery entry back into the tab it came from, and show that tab */
+/* put a gallery entry back into the tab it came from, and show that tab */
 function openEntryInItsTab(entry) {
   if (!entry) return;
-  closeLightbox();
+  closeViewer();
   const resp = entry.resp;
   if (entry.kind === 'edit') {
     showImage($('edit-frame'), $('edit-meta'), entry.dataUrl, metricsHtml(resp, entry.wall), entry.prompt);
@@ -409,8 +425,16 @@ function refBox(kind) {
   list.forEach((item, i) => {
     const d = document.createElement('div');
     d.className = 'thumb';
-    d.innerHTML = `<img src="${item.url}" alt="" /><button title="remove">×</button>`;
-    d.querySelector('button').onclick = () => { list.splice(i, 1); refBox(kind); };
+    d.tabIndex = 0;
+    d.setAttribute('role', 'button');
+    d.setAttribute('aria-label', 'reference image — open larger');
+    d.innerHTML = `<img src="${item.url}" alt="reference image" /><button title="remove">×</button>`;
+    // clicking the picture opens the viewer; the × still only removes
+    const openSelf = () => openViewer(collectRefItems(kind), i);
+    d.onclick = (ev) => { if (ev.target.tagName !== 'BUTTON') openSelf(); };
+    d.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); openSelf(); } };
+    const rm = d.querySelector('button');
+    rm.onclick = (ev) => { ev.stopPropagation(); list.splice(i, 1); refBox(kind); };
     holder.appendChild(d);
   });
 }
@@ -737,20 +761,20 @@ window.addEventListener('DOMContentLoaded', () => {
   };
   $('chat-json').onclick = () => { $('chat-jsonbox').hidden = !$('chat-jsonbox').hidden; };
 
-  $('lb-close').onclick = closeLightbox;
-  $('lb-prev').onclick = () => stepLightbox(-1);
-  $('lb-next').onclick = () => stepLightbox(1);
+  $('lb-close').onclick = closeViewer;
+  $('lb-prev').onclick = () => stepViewer(-1);
+  $('lb-next').onclick = () => stepViewer(1);
   $('lb-download').onclick = () => {
-    const cur = state.gallery[state.lightboxIndex];
-    if (cur) download(cur.dataUrl, `qwen-image-2.1-${cur.kind}-${Date.now()}.png`);
+    const cur = state.viewer.items[state.viewer.index];
+    if (cur) download(cur.dataUrl, `qwen-image-2.1-${cur.entry ? cur.entry.kind : 'reference'}-${Date.now()}.png`);
   };
-  $('lb-open').onclick = () => openEntryInItsTab(state.gallery[state.lightboxIndex]);
-  $('lightbox').onclick = (ev) => { if (ev.target === $('lightbox')) closeLightbox(); };
+  $('lb-open').onclick = () => openEntryInItsTab((state.viewer.items[state.viewer.index] || {}).entry);
+  $('lightbox').onclick = (ev) => { if (ev.target === $('lightbox')) closeViewer(); };
   window.addEventListener('keydown', (ev) => {
     if ($('lightbox').hidden) return;
-    if (ev.key === 'Escape') closeLightbox();
-    else if (ev.key === 'ArrowLeft') stepLightbox(-1);
-    else if (ev.key === 'ArrowRight') stepLightbox(1);
+    if (ev.key === 'Escape') closeViewer();
+    else if (ev.key === 'ArrowLeft') stepViewer(-1);
+    else if (ev.key === 'ArrowRight') stepViewer(1);
   });
 
   $('diag-reload').onclick = loadDiag;
