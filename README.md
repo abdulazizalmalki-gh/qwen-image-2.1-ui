@@ -35,19 +35,29 @@ prompt).
 
 ## Quickstart
 
+Pull the published image (multi-arch `linux/amd64` + `linux/arm64`, public):
+
+```bash
+docker run --rm -p 8080:8080 \
+  -e QWEN_IMAGE_API=http://your-model-server:8000 \
+  ghcr.io/abdulazizalmalki-gh/qwen-image-2.1-ui:latest
+open http://localhost:8080
+```
+
+Or with compose (the default file pulls the published image):
+
 ```bash
 git clone https://github.com/abdulazizalmalki-gh/qwen-image-2.1-ui.git
 cd qwen-image-2.1-ui
 cp .env.example .env          # set QWEN_IMAGE_API to your model server
-docker compose up -d --build
+docker compose up -d
 open http://localhost:8080
 ```
 
-Without compose:
+Building from source instead of pulling (same service, `build:` from the override):
 
 ```bash
-docker build -t qwen-image-2.1-ui .
-docker run --rm -p 8080:8080 -e QWEN_IMAGE_API=http://your-model-server:8000 qwen-image-2.1-ui
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ```
 
 Smoke-test the deployed UI (stdlib only, exercises all three generation paths):
@@ -166,8 +176,9 @@ large as the column allows, with the meta line saying which you are looking at (
   prefixes, house host names, service ports, home paths, credential shapes) appear anywhere
   in the repo. Scan it against a deliberately leaky tree to see it work: it exits non-zero
   and names file, line and rule.
-- **build** — `linux/amd64` + `linux/arm64` via BuildKit, pushed to GHCR with `latest` on the
-  default branch plus branch/PR and `sha-…` tags, with SBOM and provenance attached.
+- **build** — `linux/amd64` + `linux/arm64` via BuildKit, pushed to GHCR
+  (`ghcr.io/abdulazizalmalki-gh/qwen-image-2.1-ui`) with `latest` on the default branch only,
+  plus branch/PR and `sha-…` tags, with SBOM and provenance attached.
 - **smoke** — boots the pushed image *by digest* (no model server needed), asserts `/`,
   `/app.js` and `/styles.css` serve, that an unreachable model server degrades cleanly to
   `"upstream_reachable":false`, that the container runs as the non-root `appuser`, and then

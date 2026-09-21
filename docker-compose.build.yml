@@ -1,0 +1,9 @@
+# From-source override — use with the default file:
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+#
+# Only the image source changes; command, ports, volumes and healthcheck stay as
+# defined in docker-compose.yml.
+services:
+  ui:
+    build: .
+    image: qwen-image-2.1-ui:local
